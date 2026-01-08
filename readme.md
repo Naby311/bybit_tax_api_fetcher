@@ -221,3 +221,11 @@ Your Tax API key must have read permissions and tax-reporting access. Create on 
 ---
 
 This guide covers the new **schema-driven architecture**, the **continued utility of CSV-only mode**, and **extension steps** for additional report types. Ensure you update the schema file and transformer functions as needed for future expansions.
+------------------
+
+DISCLAIMER
+The authors and contributors of this software do not provide tax, legal, accounting, or financial advice. This software and its content are provided for informational purposes only, and as such should not be relied upon for tax, legal, accounting, or financial advice.
+
+You should obtain specific professional advice from a professional accountant, tax, or legal/financial advisor before you take any action.
+
+This software is provided 'as is'. The authors do not give any warranties of any kind, express or implied, as to the suitability or usability of this software, or any of its content.
