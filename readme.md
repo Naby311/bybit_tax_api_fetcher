@@ -1,7 +1,7 @@
 # Bybit Tax API – Schema-Driven, Extensible Pipeline
 
 ## Overview  
-This script implements a **schema-driven, extensible data pipeline** for Bybit Tax API reports. Instead of hard-coding logic for each report type, it uses a central `REPORT_SCHEMAS` configuration to dispatch raw ORC data through the correct transformation and loading steps. You simply define new report types in the schema, and the generic processor handles the rest—no changes required in the main script.
+This script suite implements a **schema-driven, extensible data pipeline** for Bybit Tax API reports. Instead of hard-coding logic for each report type, it uses a central `REPORT_SCHEMAS` configuration to dispatch raw ORC data through the correct transformation and loading steps. You simply define new report types in the schema, and the generic processor handles the rest without requiring changes in the main script.
 
 ## Architecture & Key Improvements  
 - **Schema-Driven Processing**: All report types and their database/CSV mappings are defined in `bybit_tax_api_schema_and_inserts.py` under `REPORT_SCHEMAS`.  
@@ -19,7 +19,7 @@ Multi-Report Support: Comes with pre-configured schemas for over 10 different re
 | DEPOSIT_WITHDRAWAL   |   4    | Get Express Order Deposit History   | express_deposits      | None                                 |
 | DEPOSIT_WITHDRAWAL   |   5    | Get Third Party Deposit History     | third_party_deposits  | None                                 |
 | DEPOSIT_WITHDRAWAL   |   6    | Get Crypto Withdraw History         | crypto_withdrawals    | None                                 |
-| DEPOSIT_WITHDRAWAL   |   7    | Get NFT Deposit and Withdrawal History | nft_transactions    | None                                 |
+| DEPOSIT_WITHDRAWAL   |   7    | Get NFT Deposit and Withdrawal History | nft_transactions    | None                                |
 | TRADE                |   1    | Get Spot Trade History              | spot_trades           | None                                 |
 | TRADE                |   2    | Get Contract Trade History          | contract_trades       | None                                 |
 | EARN                 |   1    | Get BybitSavings Yield History      | bybit_earn            | transform_earn_data                  |
@@ -99,7 +99,7 @@ python bybit_tax_api_combined_best.py --report-type TRADE --report-numbers 1
 ```
 
 > **Why CSV Only?**  
-> Choosing `--mode csv` generates standalone CSVs without a database. This is invaluable for **debugging** transformations, enabling rapid inspection and iteration when adding new report types or in environments without MySQL.
+> Choosing `--mode csv` generates standalone CSVs without a database. If you simply want an easy test drive of the scripts functionality, use this, or to debug transformations when adding new report types or in environments without MySQL.
 
 ### Environment Variables  
 ```bash
