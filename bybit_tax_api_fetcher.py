@@ -676,9 +676,8 @@ class EnhancedTaxJobManager:
                 logger.error("Unexpected error in download worker: %s", e)
                 time.sleep(5)
 
-    def _process_job_download(self, job: TaxJob, report_info: dict) -> int:
+        def _process_job_download(self, job: TaxJob, report_info: dict) -> int:
         """Process the download of a single job."""
-        # Initialize rows_downloaded to ensure we always return an integer
         rows_downloaded = 0
 
         try:
@@ -697,61 +696,71 @@ class EnhancedTaxJobManager:
 
             if not basepath or not files:
                 logger.warning("No files to download for %s", job.window_id)
-                return 0  # Explicitly return 0 for empty windows
+                return 0
 
             # Download and process files
             combined_df = download_and_process_files(basepath, files)
-            rows_downloaded = len(combined_df)  # This ensures rows_downloaded is always an integer
+            rows_downloaded = len(combined_df)
 
-            if not combined_df.empty:
-                try:
-                    # Process for the database if needed
-                    if job.output_mode in (OutputMode.SQL_ONLY, OutputMode.CSV_AND_SQL):
-                        conn = mysqldbconnector()
-                        try:
-                            # This generic function will now correctly look up and apply the right transformer
-                            rows_loaded, csv_path = process_report_data_generic(
-                                conn=conn,
-                                df=combined_df,
-                                report_type=ReportType(job.report_type.replace("&", "AND")),
-                                report_number=job.report_number,
-                                output_dir=MYSQL_UPLOAD_DIR if job.output_mode == OutputMode.CSV_AND_SQL else None
-                            )
-
-                            if rows_loaded > 0:
-                                logger.info(
-                                    f"Successfully processed {rows_loaded} rows"
-                                    f" for {job.report_type}[{job.report_number}]")
-                        finally:
-                            if conn and conn.is_connected():
-                                conn.close()
-
-                    # Save to a clean CSV if the mode is CSV_ONLY
-                    elif job.output_mode == OutputMode.CSV_ONLY:
-                        # We must transform the data first to get the correct columns and format
-                        transformed_df = transform_data_to_mysql_format(combined_df,
-                                                                        ReportType(job.report_type.replace("&", "AND")),
-                                                                        job.report_number)
-                        transformed_df.to_csv(job.csv_filename, index=False, encoding="utf-8")
-                        logger.info("Saved transformed CSV: %s", job.csv_filename)
-
-                except Exception as e:
-                    logger.error("Failed to process data for %s: %s", job.window_id, e)
-                    # Fallback: save with timestamp
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_filename = f"report_RAW_{job.report_type}_{job.report_number}_{timestamp}.csv"
-                    combined_df.to_csv(backup_filename, index=False, encoding="utf-8")
-                    job.csv_filename = backup_filename
-                    logger.warning("Used backup raw data filename: %s", backup_filename)
-                    # Even in error cases, we still return the original row count
-            else:
+            if combined_df.empty:
                 logger.info("Empty dataset for %s, no processing needed", job.window_id)
+                return rows_downloaded
+
+            # Transform the data first (required for both CSV and SQL modes)
+            try:
+                transformed_df = transform_data_to_mysql_format(
+                    combined_df,
+                    ReportType(job.report_type.replace("&", "AND")),
+                    job.report_number
+                )
+            except Exception as e:
+                logger.error("Data transformation failed for %s: %s", job.window_id, e)
+                # Fallback: save raw data
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_filename = f"report_RAW_{job.report_type}_{job.report_number}_{timestamp}.csv"
+                combined_df.to_csv(backup_filename, index=False, encoding="utf-8")
+                logger.warning("Saved raw backup to: %s", backup_filename)
+                return rows_downloaded
+
+            # --- SQL PATH: Use new db_manager (works for both SQLite and MySQL) ---
+            if job.output_mode in (OutputMode.SQL_ONLY, OutputMode.CSV_AND_SQL):
+                try:
+                    schema_entry = REPORT_SCHEMAS.get(
+                        (ReportType(job.report_type.replace("&", "AND")), job.report_number)
+                    )
+                    if not schema_entry:
+                        raise RuntimeError(
+                            f"No schema found for {job.report_type}[{job.report_number}]"
+                        )
+
+                    table_name = schema_entry['table']
+                    
+                    # Use the new abstraction layer (auto-detects SQLite vs MySQL)
+                    self._load_data_to_db(transformed_df, table_name)
+                    
+                    logger.info(
+                        f"Successfully inserted {rows_downloaded} rows into {table_name} "
+                        f"({db.db_type})"
+                    )
+                except Exception as e:
+                    logger.error("Database insertion failed for %s: %s", job.window_id, e)
+                    raise
+
+            # --- CSV OUTPUT: Save if requested ---
+            if job.output_mode in (OutputMode.CSV_ONLY, OutputMode.CSV_AND_SQL):
+                try:
+                    transformed_df.to_csv(job.csv_filename, index=False, encoding="utf-8")
+                    logger.info("Saved CSV: %s", job.csv_filename)
+                except Exception as e:
+                    logger.error("CSV save failed for %s: %s", job.window_id, e)
+                    raise
 
             return rows_downloaded
 
         except Exception as e:
             logger.error("Download error for %s: %s", job.window_id, e)
-            return 0  # Return 0 instead of letting an exception propagate with undefined rows_downloaded
+            return 0
+
 
     def _progress_worker(self):
         """Report progress periodically with rate limiting insights."""
